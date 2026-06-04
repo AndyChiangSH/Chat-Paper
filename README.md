@@ -3,7 +3,8 @@
 AI RAG 論文聊天系統
 
 > 提供多種輸入方式，支援 RAG 分塊切片與關鍵詞檢索，讓 AI 引導您的學術思維。
-> 
+
+![logo.png](public/logo.png)
 
 ## 使用說明
 
@@ -37,7 +38,7 @@ AI RAG 論文聊天系統
 ---
 
 <div align="center">
-<sub>Last updated: 2026/06/01</sub>  
+<sub>Last updated: 2026/06/04</sub>  
 
 <sub>Copyright © 2026 Andy Chiang</sub>
 </div>
