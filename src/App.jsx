@@ -135,7 +135,6 @@ export default function App() {
 
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
-  const ragRef = useRef(null);
 
   useEffect(() => {
     // 1. 載入 PDF.js
@@ -173,15 +172,6 @@ export default function App() {
 
     loadPdfJS();
     loadMarked();
-
-    // 點擊外部自動關閉 RAG 面板
-    const handleOutsideClick = (e) => {
-      if (ragRef.current && !ragRef.current.contains(e.target)) {
-        setIsRagSettingsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
   useEffect(() => {
@@ -310,6 +300,7 @@ export default function App() {
 
     setIsLoading(true);
     setUploadProgress("正在讀取檔案中...");
+    setHighlightedChunk(null);
 
     try {
       const reader = new FileReader();
@@ -352,6 +343,7 @@ export default function App() {
   const loadDemoPaperFromArxiv = async () => {
     setIsLoading(true);
     setUploadProgress("正在從 arXiv 下載原始論文 (1706.03762)...");
+    setHighlightedChunk(null);
 
     // 使用高可用、快速的 CORS 代理服務直連 arXiv PDF
     const originalArxivUrl = "https://arxiv.org/pdf/1706.03762";
@@ -389,6 +381,7 @@ export default function App() {
   const loadDemoPaperFallback = () => {
     setIsLoading(true);
     setUploadProgress("正在加載經典還原結構...");
+    setHighlightedChunk(null);
     setTimeout(() => {
       setPages(BACKUP_DEMO_PAPER.pages);
       setPaperAnalysis({
@@ -413,6 +406,7 @@ export default function App() {
     if (!text.trim()) return;
     setIsLoading(true);
     setUploadProgress("正在分析您輸入的論文內容...");
+    setHighlightedChunk(null);
     const mockPages = [{ pageNum: 1, text: text }];
     setPages(mockPages);
     await analyzePaper(text, mockPages);
@@ -484,7 +478,7 @@ export default function App() {
       setChatHistory([
         {
           role: 'model',
-          text: `🎉 **《${parsedData.title}》** 已成功讀取並解析完畢！\n\n我已經自動為這篇文獻切分了 **${paperChunks.length} 個檢索段落**。\n\n現在，您可以點選推薦問題或自行發問，系統將會透過 RAG 智能抽取最匹配的論文片段！`,
+          text: `🎉 **《${parsedData.title}》** 已成功讀取並解析完畢！\n\n現在，您可以點選推薦問題或自行發問，系統將會透過 RAG 智能抽取最匹配的論文片段！`,
           sources: []
         }
       ]);
@@ -668,11 +662,6 @@ export default function App() {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 150);
-
-    // 取消高亮
-    setTimeout(() => {
-      setHighlightedChunk(null);
-    }, 6000);
   };
 
   const handleTextSelection = () => {
@@ -717,6 +706,7 @@ export default function App() {
   };
 
   const clearChat = () => {
+    setHighlightedChunk(null);
     setChatHistory([
       {
         role: 'model',
@@ -848,79 +838,14 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold bg-gradient-to-r from-white via-indigo-200 to-emerald-300 bg-clip-text text-transparent">
-              Chat Paper <span className="text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded-full ml-1">v1.0</span>
+              Chat Paper <span className="text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded-full ml-1">v1.1</span>
             </h1>
             {/* <p className="text-[10px] text-slate-400 hidden sm:block">論文聊天系統</p> */}
           </div>
         </div>
 
         {/* 導覽列右側按鈕群組 */}
-        <div className="flex items-center space-x-2.5 relative" ref={ragRef}>
-
-          {/* 自訂 RAG 參數設定按鈕 (放置於免費金鑰左側) */}
-          {paperAnalysis && (
-            <div className="relative">
-              <button
-                onClick={() => setIsRagSettingsOpen(!isRagSettingsOpen)}
-                className={`px-3.5 py-2 text-xs font-semibold rounded-lg border flex items-center space-x-1.5 transition-all ${isRagSettingsOpen
-                    ? 'bg-indigo-600/25 border-indigo-500 text-white'
-                    : 'bg-slate-850 border-slate-750 text-slate-300 hover:bg-slate-800'
-                  }`}
-              >
-                <Icons.Sliders />
-                <span>RAG 設定</span>
-                {/* <Icons.ChevronDown /> */}
-              </button>
-
-              {/* RAG 切片懸浮下拉面板 */}
-              {isRagSettingsOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-750 rounded-xl p-4 shadow-2xl z-50 animate-fadeIn">
-                  <h4 className="text-xs font-bold text-indigo-400 flex items-center space-x-1.5 mb-3">
-                    <Icons.Sliders />
-                    <span>RAG 檢索段落設定（即時重組）</span>
-                  </h4>
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                        <span>段落長度 (Chunk Size)</span>
-                        <span className="font-bold text-indigo-300">{chunkSize} 字</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="100"
-                        max="1000"
-                        step="100"
-                        value={chunkSize}
-                        onChange={(e) => setChunkSize(parseInt(e.target.value))}
-                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                        <span>重疊字數 (Overlap)</span>
-                        <span className="font-bold text-indigo-300">{chunkOverlap} 字</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="90"
-                        step="10"
-                        value={chunkOverlap}
-                        onChange={(e) => setChunkOverlap(parseInt(e.target.value))}
-                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="border-t border-slate-800 mt-3 pt-2.5 flex justify-between items-center text-[10px] text-slate-500">
-                    <span>* 將重塑倒排索引</span>
-                    <span className="text-emerald-400 font-bold bg-emerald-400/10 px-2 py-0.5 rounded-full">
-                      已切分 {paperChunks.length} 段
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+        <div className="flex items-center space-x-2.5 relative">
 
           {/* 金鑰與管理 */}
           <button
@@ -930,12 +855,25 @@ export default function App() {
             <span>🔑 {customApiKey ? "自訂金鑰已啟用" : "使用預設免費金鑰"}</span>
           </button>
 
+          {/* 自訂 RAG 參數設定按鈕 (放置於自訂金鑰右側) */}
+          <button
+            onClick={() => setIsRagSettingsOpen(true)}
+            className={`px-3.5 py-2 text-xs font-semibold rounded-lg border flex items-center space-x-1.5 transition-all ${isRagSettingsOpen
+                ? 'bg-indigo-600/25 border-indigo-500 text-white'
+                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
+              }`}
+          >
+            <Icons.Sliders />
+            <span>RAG 設定</span>
+          </button>
+
           {paperAnalysis && (
             <button
               onClick={() => {
                 setPaperAnalysis(null);
                 setPages([]);
                 setChatHistory([]);
+                setHighlightedChunk(null);
               }}
               className="px-3 py-2 text-xs font-semibold text-rose-400 rounded-lg border border-rose-950/40 bg-rose-950/10 hover:bg-rose-950/30 transition-all flex items-center space-x-1.5"
             >
@@ -1351,7 +1289,17 @@ export default function App() {
 
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">您的 API 金鑰</label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase">您的 API 金鑰</label>
+                  <a
+                    href="https://aistudio.google.com/api-keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-indigo-400 hover:text-indigo-300 underline transition-all"
+                  >
+                    Google AI Studio
+                  </a>
+                </div>
                 <input
                   type="password"
                   value={customApiKey}
@@ -1382,6 +1330,94 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* RAG Settings Modal */}
+      {isRagSettingsOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setIsRagSettingsOpen(false)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-white mb-2 flex items-center space-x-2">
+              <Icons.Sliders />
+              <span>RAG 檢索段落設定</span>
+            </h3>
+            <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+              設定 RAG 檢索時的文本分塊大小與重疊字數，這將即時影響系統的檢索精確度。
+            </p>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <div className="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>段落長度 (Chunk Size)</span>
+                  <span className="font-bold text-indigo-300">{chunkSize} 字</span>
+                </div>
+                <input
+                  type="range"
+                  min="100"
+                  max="1000"
+                  step="100"
+                  value={chunkSize}
+                  onChange={(e) => setChunkSize(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                />
+              </div>
+              <div>
+                <div className="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>重疊字數 (Overlap)</span>
+                  <span className="font-bold text-indigo-300">{chunkOverlap} 字</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="90"
+                  step="10"
+                  value={chunkOverlap}
+                  onChange={(e) => setChunkOverlap(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-800 mt-4 pt-3 flex justify-between items-center text-xs text-slate-500 mb-4">
+              <span>* 將重塑倒排索引</span>
+              <span className="text-emerald-400 font-bold bg-emerald-400/10 px-2.5 py-1 rounded-full">
+                已切分 {paperChunks.length} 段
+              </span>
+            </div>
+
+            <div className="flex">
+              <button
+                onClick={() => setIsRagSettingsOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-all shadow-lg shadow-indigo-950/50"
+              >
+                關閉並返回
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Footer */}
+      <footer className="border-t border-slate-800 bg-slate-900/60 backdrop-blur py-4 px-6 text-center text-[11px] text-slate-500 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
+        <span>Last Updated: 2026/06/04</span>
+        <span className="hidden sm:inline text-slate-700">|</span>
+        <span>Copyright © 2026 Andy Chiang</span>
+        <span className="hidden sm:inline text-slate-700">|</span>
+        <a
+          href="https://github.com/AndyChiangSH/Chat-Paper"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-indigo-400 hover:text-indigo-300 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+          </svg>
+          GitHub
+        </a>
+      </footer>
     </div>
   );
 }
